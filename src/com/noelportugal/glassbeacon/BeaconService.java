@@ -527,12 +527,42 @@ public class BeaconService extends Service implements SensorEventListener{
 	                	String name = jObject.getString("name");
 	                	
 	                	
-	                	liveCard = new LiveCard(getBaseContext(), "ItemCard");
-	                	RemoteViews liveCardView = new RemoteViews(getPackageName(), R.layout.item_layout);
-	                	liveCardView.setTextViewText(R.id.item_name, name);
-	                	liveCard.setViews(liveCardView);
-	                	liveCard.publish(PublishMode.REVEAL);
 	                	
+	                	/*RemoteViews view0 = new CardBuilder(getApplication(), CardBuilder.Layout.TEXT)
+	            	    .setText("started presentation")
+	            	    .getRemoteViews();
+	            		
+	            		liveCard = new LiveCard(getApplication(),"beacon");
+	            		liveCard.setViews(view0);
+	            		//change this to capture click
+	            		//Intent intent = new Intent(getApplication(), BeaconService.class);
+	            		Intent intentpending = new Intent(getApplication(), BeaconService.class);
+	            		liveCard.setAction(PendingIntent.getActivity(getApplication(), 0, intentpending, 0));
+	                	*/
+	                	
+//	                	Intent intent = new Intent(getApplicationContext(), LiveCardMenuActivity.class);
+//	                	startActivity(intent);
+//	                	RemoteViews view1 = new CardBuilder(getApplication(), CardBuilder.Layout.TITLE)
+//	            	    .setText(name)
+//	            	    .getRemoteViews();
+//	            		
+//	                	view1.setIntent(viewId, methodName, value)(view0.getLayoutId(), intentpending);
+//	            		liveCard = new LiveCard(getApplication(),"beacon");
+//	            		
+//	            		if(publishedcards == null) publishedcards = new ArrayList<LiveCard>();
+//	            		
+//	            		if(liveCard != null) publishedcards.add(liveCard);
+//	            		liveCard.setViews(view1);
+//	            		//change this to capture click
+//	            		//Intent intent = new Intent(getApplication(), BeaconService.class);
+//	            		Intent intent = new Intent(getApplication(), LiveCardMenuActivity.class);
+//	            		liveCard.
+//	            		//intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
+//	                    //        Intent.FLAG_ACTIVITY_CLEAR_TASK);
+//	            		liveCard.setAction(PendingIntent.getActivity(getApplication(), 0, intent, 0));
+//	            		liveCard.publish(LiveCard.PublishMode.REVEAL);
+	                	
+	            		
 	                	Log.d(TAGWEAR,"jObject NOT null, will playAudio() : "+jObject.getString("audioUrl"));
 	                	playAudio(jObject.getString("audioUrl"));
 	                	
