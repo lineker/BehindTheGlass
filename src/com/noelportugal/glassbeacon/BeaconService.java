@@ -73,8 +73,8 @@ public class BeaconService extends Service implements SensorEventListener{
 	private static final String TAGWEAR = "BeaconServiceWear";
 	private static final String ESTIMOTE_PROXIMITY_UUID = "b9407f30-f5f8-466e-aff9-25556b57fe6d";
 
-	private static final int officeMajor = 36941;
-	private static final int officeMinor = 33845;
+	private static final int officeMajor = 55555;
+	private static final int officeMinor = 11111;
 
 	private static final int kitchenMajor = 32789;
 	private static final int kitchenMinor = 44173;
@@ -82,7 +82,7 @@ public class BeaconService extends Service implements SensorEventListener{
 	private static final int bedroomMajor = 54060;
 	private static final int bedroomMinor = 38916;
 
-	private static final double enterThreshold = 1.5;
+	private static final double enterThreshold = 1.0;
 	private static final double exitThreshold = 2.5;
 
 	private static Boolean listening = false;
@@ -219,7 +219,7 @@ public class BeaconService extends Service implements SensorEventListener{
 		// Default values are 5s of scanning and 25s of waiting time to save CPU cycles.
 		// In order for this demo to be more responsive and immediate we lower down those values.
 		//beaconManager.setBackgroundScanPeriod(TimeUnit.SECONDS.toMillis(5), TimeUnit.SECONDS.toMillis(25));
-		beaconManager.setForegroundScanPeriod(TimeUnit.SECONDS.toMillis(5), TimeUnit.SECONDS.toMillis(10));
+		beaconManager.setForegroundScanPeriod(TimeUnit.SECONDS.toMillis(2), TimeUnit.SECONDS.toMillis(1));
 		beaconManager.setRangingListener(new BeaconManager.RangingListener() {
 			@Override
 			public void onBeaconsDiscovered(Region region, final List<Beacon> beacons) {
@@ -227,39 +227,31 @@ public class BeaconService extends Service implements SensorEventListener{
 					@Override
 					public void run() {
 						for (Beacon beacon : beacons) {
+							Log.d(TAG, "Major = " + beacon.getMajor() + ", Minor = " + beacon.getMinor() + ", UUID = " + beacon.getProximityUUID());
 							if(beacon.getProximityUUID() == ESTIMOTE_PROXIMITY_UUID) {
-								Log.d(TAG, "MAC = " + beacon.getMacAddress() + ", RSSI = " + -beacon.getRssi() + ", UUID = " + beacon.getProximityUUID());
+								Log.d(TAG, "Major = " + beacon.getMajor() + ", Minor = " + beacon.getMinor() + ", UUID = " + beacon.getProximityUUID());
 							}
 							if (beacon.getMajor() == officeMajor && beacon.getMinor() == officeMinor ){
 								officeBeacon = beacon;
 								Log.d(TAG, "Found group38 beacon");
 							}
-							if (beacon.getMajor() == kitchenMajor && beacon.getMinor() == kitchenMinor){
-								kitchenBeacon = beacon;
-							}
-							if (beacon.getMajor() == bedroomMajor && beacon.getMinor() == bedroomMinor){
-								bedroomBeacon = beacon;
-							}
 						}
 						
-						if(!listening && ttt) {
-							ttt = false;
-							Log.d(TAG, "will start playing");
-							new SendPostTask(ESTIMOTE_PROXIMITY_UUID).execute();
-							
-						}
+						
 						
 						if (officeBeacon != null){
 							double officeDistance = Utils.computeAccuracy(officeBeacon);
-							Log.d(TAG, "Monalisa Distance: " + officeDistance);
+							Log.d(TAGWEAR, "Monalisa Distance: " + officeDistance);
 							
 							if (officeDistance < enterThreshold){
 								officeState = BeaconState.INSIDE;
-								Log.d(TAG, "Close to monalisa");
-								/*if(!listening) {
+								Log.d(TAGWEAR, "Close to monalisa");
+								if(!listening && ttt) {
+									ttt = false;
 									Log.d(TAG, "will start playing");
-									playAudio(audioURL);
-								}*/
+									new SendPostTask(ESTIMOTE_PROXIMITY_UUID).execute();
+									
+								}
 								
 								//showNotification("You are in the office");
 							}else if (officeDistance > exitThreshold && officeState == BeaconState.INSIDE){
