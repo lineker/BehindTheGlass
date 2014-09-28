@@ -9,6 +9,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -109,6 +110,13 @@ public class BeaconService extends Service implements SensorEventListener{
 	            public  void  onCompletion(MediaPlayer mediaPlayer) { 
 	                listening = false;
 	                Log.d(TAGWEAR, "stopped audio");
+	                Log.d(TAGWEAR, "removing cards");
+	                for (Iterator iterator = publishedcards.iterator(); iterator
+							.hasNext();) {
+						LiveCard card = (LiveCard) iterator.next();
+						card.unpublish();
+						
+					}
 	            }
 	        });
             Log.d(TAGWEAR, "start play");
@@ -305,17 +313,33 @@ public class BeaconService extends Service implements SensorEventListener{
 		});
 	}
 
-	private void stopScanning(){
-		try {
-			//beaconManager.stopMonitoring(houseRegion);
-			beaconManager.stopRanging(houseRegion);
-			CurrentCardId = null;
-			listening = false;
-			if(mediaPlayer != null)
-				mediaPlayer.stop();
-		} catch (RemoteException e) {
-			Log.e(TAG, "Cannot stop but it does not matter now", e);
+	private void Dispose() {
+		Log.e(TAGWEAR, "Disposing ");
+		if(beaconManager != null)
+			try {
+				beaconManager.stopRanging(houseRegion);
+			} catch (RemoteException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		CurrentCardId = null;
+		listening = false;
+		
+		if(mediaPlayer != null)
+			mediaPlayer.stop();
+		
+		if(publishedcards != null) {
+			for (Iterator iterator = publishedcards.iterator(); iterator.hasNext();) {
+				LiveCard card = (LiveCard) iterator.next();
+				card.unpublish();
+			}
 		}
+		
+	}
+	
+	private void stopScanning(){
+		//beaconManager.stopMonitoring(houseRegion);
+		Dispose();
 	}
 	
 	private static String convertStreamToString(InputStream is) {
@@ -360,7 +384,7 @@ public class BeaconService extends Service implements SensorEventListener{
 		}
 	}
 
-	
+	List<LiveCard> publishedcards;
 	private void showNotification(String msg, String imageStringId) {
 		
 		Log.d(TAGWEAR,"showNotification msg: " + msg);
@@ -392,7 +416,13 @@ public class BeaconService extends Service implements SensorEventListener{
 		Log.d(TAG, "setting text and image url");
 		views.setTextViewText(R.id.livecard_content,msg);
 		views.setImageViewUri(R.id.livecard_image, Uri.parse(imgUrl));*/
+		
 		liveCard = new LiveCard(getApplication(),"beacon");
+		
+		if(publishedcards == null) publishedcards = new ArrayList<LiveCard>();
+		
+		if(liveCard != null) publishedcards.add(liveCard);
+		
 		Log.d(TAG, "Setting view");
 		//liveCard.setViews(views);
 		liveCard.setViews(view1);
@@ -412,6 +442,7 @@ public class BeaconService extends Service implements SensorEventListener{
 	public void onDestroy() {
 		super.onDestroy();
 		beaconManager.disconnect();
+		Dispose();
 	}
 	
 	
