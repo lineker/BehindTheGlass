@@ -43,6 +43,7 @@ import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
@@ -100,7 +101,9 @@ public class BeaconService extends Service implements SensorEventListener{
         try {
             mediaPlayer.setDataSource(getApplicationContext(), uri);
             mediaPlayer.prepare();
-            mediaPlayer.start();
+            Log.d(TAGWEAR, "Will start checking for new slide");
+            CheckForNewSlide(mediaPlayer);
+            
             
             mediaPlayer.setOnCompletionListener(new  MediaPlayer.OnCompletionListener() { 
 	            public  void  onCompletion(MediaPlayer mediaPlayer) { 
@@ -108,8 +111,8 @@ public class BeaconService extends Service implements SensorEventListener{
 	                Log.d(TAGWEAR, "stopped audio");
 	            }
 	        });
-            Log.d(TAGWEAR, "Will start checking for new slide");
-            CheckForNewSlide(mediaPlayer);
+            Log.d(TAGWEAR, "start play");
+            mediaPlayer.start();
         } catch (IOException e) {
         	Log.d(TAGWEAR,"error when trying to open media player ="+url);
             e.printStackTrace();
@@ -119,37 +122,60 @@ public class BeaconService extends Service implements SensorEventListener{
 	String CurrentCardId;
 	public void CheckForNewSlide(final MediaPlayer mediaPlayer) {
 		 // SLEEP 2 SECONDS HERE ...
-        Handler handler = new Handler(); 
-        handler.postDelayed(new Runnable() { 
-             public void run() { 
-            	 Log.d(TAGWEAR, "checking for currentposition");
-            	 if(mediaPlayer != null) {
-            		 int currentPosition = mediaPlayer.getCurrentPosition();
-                	 Log.d(TAGWEAR, "Current position mediaplayer : " + currentPosition);
-                	 try {
-                		 Log.d(TAGWEAR, "searching for new slide : " + currentPosition);
-                		 JSONArray cards = jObject.getJSONArray("cards");
-                    	 for (int i = 0; i < cards.length(); i++) {
-                    		 JSONObject card = cards.getJSONObject(i);
-                    		 String cardImageId = card.getString("imageUrl");
-                    		 if(card.getInt("time") <= currentPosition && cardImageId != CurrentCardId) {
-                    			 CurrentCardId = cardImageId;
-                    			 showNotification(card.getString("text"), cardImageId);
-                    		 }
-                    	 }
-                	 } catch(Exception ex)
-                	 {
-                		 Log.d(TAGWEAR, "something went wrong while checking for slide.");
-                	 }
-                	 
-            	 }
-            	 
-            	 
-            	 //TODO: check if we need to change slide.
-            	 
-            	 CheckForNewSlide(mediaPlayer); 
-             } 
-        }, 2000); 
+		
+   	 Log.d(TAGWEAR, "checking for currentposition");
+	 if(mediaPlayer != null) {
+		 int currentPosition = mediaPlayer.getCurrentPosition();
+    	 Log.d(TAGWEAR, "Current position mediaplayer : " + currentPosition);
+    	 try {
+    		 Log.d(TAGWEAR, "searching for new slide : " + currentPosition);
+    		 JSONArray cards = jObject.getJSONArray("cards");
+        	 for (int i = 0; i < 1; i++) {
+        		 JSONObject card = cards.getJSONObject(i);
+        		 String cardImageId = card.getString("imageUrl");
+        		 if(card.getInt("time") <= currentPosition && cardImageId != CurrentCardId) {
+        			 CurrentCardId = cardImageId;
+        			 showNotification(card.getString("text"), cardImageId);
+        		 }
+        	 }
+    	 } catch(Exception ex)
+    	 {
+    		 Log.d(TAGWEAR, "something went wrong while checking for slide.");
+    	 }
+    	 
+	 }
+		
+//        Handler handler = new Handler(); 
+//             handler.run(new Runnable() { 
+//             public void run() { 
+//            	 Log.d(TAGWEAR, "checking for currentposition");
+//            	 if(mediaPlayer != null) {
+//            		 int currentPosition = mediaPlayer.getCurrentPosition();
+//                	 Log.d(TAGWEAR, "Current position mediaplayer : " + currentPosition);
+//                	 try {
+//                		 Log.d(TAGWEAR, "searching for new slide : " + currentPosition);
+//                		 JSONArray cards = jObject.getJSONArray("cards");
+//                    	 for (int i = 0; i < cards.length(); i++) {
+//                    		 JSONObject card = cards.getJSONObject(i);
+//                    		 String cardImageId = card.getString("imageUrl");
+//                    		 if(card.getInt("time") <= currentPosition && cardImageId != CurrentCardId) {
+//                    			 CurrentCardId = cardImageId;
+//                    			 showNotification(card.getString("text"), cardImageId);
+//                    		 }
+//                    	 }
+//                	 } catch(Exception ex)
+//                	 {
+//                		 Log.d(TAGWEAR, "something went wrong while checking for slide.");
+//                	 }
+//                	 
+//            	 }
+//            	 
+//            	 
+//            	 //TODO: check if we need to change slide.
+//            	 
+//            	 CheckForNewSlide(mediaPlayer); 
+//             } 
+//        }, 2000); 
         
 	}
 	
@@ -163,6 +189,8 @@ public class BeaconService extends Service implements SensorEventListener{
 		handler.post(runnable);
 	}
 
+	boolean ttt = true;
+	
 	@Override
 	public void onCreate() {
 		super.onCreate();
@@ -185,6 +213,9 @@ public class BeaconService extends Service implements SensorEventListener{
 		houseRegion = new Region("regionId", ESTIMOTE_PROXIMITY_UUID, null, null);
 		beaconManager = new BeaconManager(getApplicationContext());
 
+		
+		
+		
 		// Default values are 5s of scanning and 25s of waiting time to save CPU cycles.
 		// In order for this demo to be more responsive and immediate we lower down those values.
 		//beaconManager.setBackgroundScanPeriod(TimeUnit.SECONDS.toMillis(5), TimeUnit.SECONDS.toMillis(25));
@@ -211,7 +242,8 @@ public class BeaconService extends Service implements SensorEventListener{
 							}
 						}
 						
-						if(!listening) {
+						if(!listening && ttt) {
+							ttt = false;
 							Log.d(TAG, "will start playing");
 							new SendPostTask(ESTIMOTE_PROXIMITY_UUID).execute();
 							
@@ -341,7 +373,8 @@ public class BeaconService extends Service implements SensorEventListener{
 		
 		Log.d(TAGWEAR,"showNotification msg: " + msg);
 		Log.d(TAGWEAR,"showNotification imageStringId: " + imageStringId);
-		if(msg.isEmpty()) msg = "testcode";
+		if(msg.isEmpty()) msg = "Le Louvre - Paris" +
+				". All Rights Reserved.";
 		
 		int imageId = R.drawable.image1;
 		if(imageStringId.compareToIgnoreCase("image1") == 0) {
@@ -401,10 +434,12 @@ public class BeaconService extends Service implements SensorEventListener{
 				stopScanning();
 			}else if (voice.contains("start")){
 				Log.d(TAG,"startScanning");
+				//(new SendPostTask(ESTIMOTE_PROXIMITY_UUID)).execute();
 				startScanning();
 			}else{
 				Log.d(TAG,"couldnt understand so lets start anyway");
 				Log.d(TAG,"startScanning");
+				//(new SendPostTask(ESTIMOTE_PROXIMITY_UUID)).execute();
 				startScanning();
 			}
 		}
@@ -423,7 +458,7 @@ public class BeaconService extends Service implements SensorEventListener{
 		// TODO Auto-generated method stub
 
 	}
-
+	
 	private class SendPostTask extends AsyncTask<Void, Void, Void> {
 
 		String uuid;
@@ -466,13 +501,65 @@ public class BeaconService extends Service implements SensorEventListener{
 	                if(jObject != null){
 	                	Log.d(TAGWEAR,"jObject NOT null, will playAudio() : "+jObject.getString("audioUrl"));
 	                	playAudio(jObject.getString("audioUrl"));
+	                	
+	                	JSONArray cards = jObject.getJSONArray("cards");
+	                	int[] times = new int[cards.length()];
+	                	String[] urls = new String[cards.length()];
+	                	String[] texts = new String[cards.length()];
+	                	for(int i = 0; i < cards.length(); i++){
+	                		times[i] = cards.getJSONObject(i).getInt("time");
+	                		urls[i] = cards.getJSONObject(i).getString("imageUrl");
+	                		texts[i] = cards.getJSONObject(i).getString("text");
+	                	}
+	                	
+	             
+	                	showNotification(texts[0], urls[0]);
+	                	Thread.sleep(times[1]);
+	                	for(int i = 1; i < times.length - 1; i++){
+	                		showNotification(texts[i], urls[i]);
+	                		if(i <= times.length){
+	                			Thread.sleep(times[i + 1] - times[i]);
+	                		}
+	                	}
+	                	showNotification(texts[times.length - 1], urls[times.length - 1]);
+	                	//showNotification(texts[times.length], imageStringId)
+//	                	while(listening){
+//	                		Log.d(TAGWEAR, "checking for currentposition");
+//	   	               	 if(mediaPlayer != null) {
+//	   	               		 int currentPosition = mediaPlayer.getCurrentPosition();
+//	   	                   	 Log.d(TAGWEAR, "Current position mediaplayer : " + currentPosition);
+//	   	                   	 try {
+//	   	                   		 Log.d(TAGWEAR, "searching for new slide : " + currentPosition);
+//	   	                   		 JSONArray cards = jObject.getJSONArray("cards");
+//	   	                       	 for (int i = 0; i < cards.length(); i++) {
+//	   	                       		 JSONObject card = cards.getJSONObject(i);
+//	   	                       		 String cardImageId = card.getString("imageUrl");
+//	   	                       		 if(card.getInt("time") <= currentPosition && cardImageId != CurrentCardId) {
+//	   	                       			 CurrentCardId = cardImageId;
+//	   	                       			 showNotification(card.getString("text"), cardImageId);
+//	   	                       		 }
+//	   	                       	 }
+//	   	                   	 } catch(Exception ex)
+//	   	                   	 {
+//	   	                   		 Log.d(TAGWEAR, "something went wrong while checking for slide.");
+//	   	                   	 }
+//	   	                   	 
+//	   	               	 }	
+//	   	               	 Thread.sleep(3000);
+//	                	}
+	                	
+	                
+	                	
+	                	
 	                }
 	                	
 	                else 
 	                	Log.d(TAGWEAR,"jObject is null");
 	            }
-	        } catch (Exception e) {Log.i("TAGWEAR","something went wrong with the http request");}
-	            return null;
+	        } catch (Exception e) {Log.i("TAGWEAR","something went wrong with the http request");
+	        e.printStackTrace();}
+	            
+	        return null;
 	    }
 
 	    protected void onPostExecute(Void result) {
