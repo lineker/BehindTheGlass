@@ -1,13 +1,24 @@
 package com.noelportugal.glassbeacon;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import com.estimote.sdk.Beacon;
 import com.estimote.sdk.BeaconManager;
@@ -30,8 +41,11 @@ import android.hardware.SensorManager;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.PowerManager;
+import android.os.PowerManager.WakeLock;
 import android.os.RemoteException;
 import android.speech.RecognizerIntent;
 import android.util.Log;
@@ -55,7 +69,7 @@ public class BeaconService extends Service implements SensorEventListener{
 	private LiveCard liveCard;
 	
 	private static final String TAG = "BeaconService";
-	
+	private static final String TAGWEAR = "BeaconServiceWear";
 	private static final String ESTIMOTE_PROXIMITY_UUID = "b9407f30-f5f8-466e-aff9-25556b57fe6d";
 
 	private static final int officeMajor = 36941;
@@ -71,27 +85,73 @@ public class BeaconService extends Service implements SensorEventListener{
 	private static final double exitThreshold = 2.5;
 
 	private static Boolean listening = false;
-
+	JSONObject jObject = null;
+	
+	
 	private static final String audioURL = "https://wearhacksmusic.blob.core.windows.net/asset-27608814-c12a-40d8-ab04-d5a631936e87/ACDC%20-%20You%20Shook%20Me%20All%20Night%20Long.mp4?sv=2012-02-12&sr=c&si=0462accd-c2f2-48ce-802a-f43c67f131f8&sig=HUqZaCAPgLm7uzovyi4FjJxG3s2TGoj1k7x1b2j3vdE%3D&st=2014-09-28T04%3A02%3A18Z&se=2016-09-27T04%3A02%3A18Z";
+	MediaPlayer mediaPlayer;
 	
 	public void playAudio(String url){
-        MediaPlayer mediaPlayer = new MediaPlayer();
+		Log.d(TAGWEAR, "Will start audio");
+		listening = true;
+        mediaPlayer = new MediaPlayer();
         mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
         Uri uri = Uri.parse(url);
         try {
             mediaPlayer.setDataSource(getApplicationContext(), uri);
             mediaPlayer.prepare();
             mediaPlayer.start();
+            
             mediaPlayer.setOnCompletionListener(new  MediaPlayer.OnCompletionListener() { 
-            public  void  onCompletion(MediaPlayer mediaPlayer) { 
-                listening = false;
-            } 
-        });
+	            public  void  onCompletion(MediaPlayer mediaPlayer) { 
+	                listening = false;
+	                Log.d(TAGWEAR, "stopped audio");
+	            }
+	        });
+            Log.d(TAGWEAR, "Will start checking for new slide");
+            CheckForNewSlide(mediaPlayer);
         } catch (IOException e) {
+        	Log.d(TAGWEAR,"error when trying to open media player ="+url);
             e.printStackTrace();
         }
     }
 	
+	String CurrentCardId;
+	public void CheckForNewSlide(final MediaPlayer mediaPlayer) {
+		 // SLEEP 2 SECONDS HERE ...
+        Handler handler = new Handler(); 
+        handler.postDelayed(new Runnable() { 
+             public void run() { 
+            	 Log.d(TAGWEAR, "checking for currentposition");
+            	 if(mediaPlayer != null) {
+            		 int currentPosition = mediaPlayer.getCurrentPosition();
+                	 Log.d(TAGWEAR, "Current position mediaplayer : " + currentPosition);
+                	 try {
+                		 Log.d(TAGWEAR, "searching for new slide : " + currentPosition);
+                		 JSONArray cards = jObject.getJSONArray("cards");
+                    	 for (int i = 0; i < cards.length(); i++) {
+                    		 JSONObject card = cards.getJSONObject(i);
+                    		 String cardImageId = card.getString("imageUrl");
+                    		 if(card.getInt("time") <= currentPosition && cardImageId != CurrentCardId) {
+                    			 CurrentCardId = cardImageId;
+                    			 showNotification(card.getString("text"), cardImageId);
+                    		 }
+                    	 }
+                	 } catch(Exception ex)
+                	 {
+                		 Log.d(TAGWEAR, "something went wrong while checking for slide.");
+                	 }
+                	 
+            	 }
+            	 
+            	 
+            	 //TODO: check if we need to change slide.
+            	 
+            	 CheckForNewSlide(mediaPlayer); 
+             } 
+        }, 2000); 
+        
+	}
 	
 	@Override
 	public IBinder onBind(Intent intent) {
@@ -107,8 +167,11 @@ public class BeaconService extends Service implements SensorEventListener{
 	public void onCreate() {
 		super.onCreate();
 
+		PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+		WakeLock wakeLock = pm.newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK , TAG);
+		wakeLock.acquire(1000 * 60 * 2);
+		
 		handler = new Handler();
-
 
 		// TODO add sensor data to stop/start beacon scanning
 		sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
@@ -133,9 +196,12 @@ public class BeaconService extends Service implements SensorEventListener{
 					@Override
 					public void run() {
 						for (Beacon beacon : beacons) {
-							Log.d(TAG, "MAC = " + beacon.getMacAddress() + ", RSSI = " + -beacon.getRssi() + ", UUID = " + beacon.getProximityUUID());
+							if(beacon.getProximityUUID() == ESTIMOTE_PROXIMITY_UUID) {
+								Log.d(TAG, "MAC = " + beacon.getMacAddress() + ", RSSI = " + -beacon.getRssi() + ", UUID = " + beacon.getProximityUUID());
+							}
 							if (beacon.getMajor() == officeMajor && beacon.getMinor() == officeMinor ){
 								officeBeacon = beacon;
+								Log.d(TAG, "Found group38 beacon");
 							}
 							if (beacon.getMajor() == kitchenMajor && beacon.getMinor() == kitchenMinor){
 								kitchenBeacon = beacon;
@@ -144,26 +210,33 @@ public class BeaconService extends Service implements SensorEventListener{
 								bedroomBeacon = beacon;
 							}
 						}
-
+						
+						if(!listening) {
+							Log.d(TAG, "will start playing");
+							new SendPostTask(ESTIMOTE_PROXIMITY_UUID).execute();
+							
+						}
 						
 						if (officeBeacon != null){
 							double officeDistance = Utils.computeAccuracy(officeBeacon);
-							Log.d(TAG, "officeDistance: " + officeDistance);
+							Log.d(TAG, "Monalisa Distance: " + officeDistance);
 							
-							if(!listening) {
-								//playAudio(audioURL);
-							}
-							
-							if (officeDistance < enterThreshold && officeState == BeaconState.OUTSIDE){
+							if (officeDistance < enterThreshold){
 								officeState = BeaconState.INSIDE;
-								showNotification("You are in the office");
+								Log.d(TAG, "Close to monalisa");
+								/*if(!listening) {
+									Log.d(TAG, "will start playing");
+									playAudio(audioURL);
+								}*/
+								
+								//showNotification("You are in the office");
 							}else if (officeDistance > exitThreshold && officeState == BeaconState.INSIDE){
 								officeState = BeaconState.OUTSIDE;
-								showNotification("You left the office");
+								//showNotification("You left the office");
 							}
 						}
 						
-						if (kitchenBeacon != null){
+						/*if (kitchenBeacon != null){
 							double kitchenDistance = Utils.computeAccuracy(kitchenBeacon);
 							Log.d(TAG, "kitchenDistance: " + kitchenDistance);
 							if (kitchenDistance < enterThreshold && kitchenState == BeaconState.OUTSIDE){
@@ -185,7 +258,7 @@ public class BeaconService extends Service implements SensorEventListener{
 								bedroomState = BeaconState.OUTSIDE;
 								showNotification("You left the bedroom");
 							}
-						}
+						}*/
 
 
 					}
@@ -212,45 +285,98 @@ public class BeaconService extends Service implements SensorEventListener{
 		try {
 			//beaconManager.stopMonitoring(houseRegion);
 			beaconManager.stopRanging(houseRegion);
+			CurrentCardId = null;
+			listening = false;
+			if(mediaPlayer != null)
+				mediaPlayer.stop();
 		} catch (RemoteException e) {
 			Log.e(TAG, "Cannot stop but it does not matter now", e);
 		}
 	}
+	
+	private static String convertStreamToString(InputStream is) {
+	    /*
+	     * To convert the InputStream to String we use the BufferedReader.readLine()
+	     * method. We iterate until the BufferedReader return null which means
+	     * there's no more data to read. Each line will appended to a StringBuilder
+	     * and returned as String.
+	     */
+	    BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+	    StringBuilder sb = new StringBuilder();
 
-	public static Bitmap getBitmap(String url) {
+	    String line = null;
 	    try {
-	    	Log.d(TAG, "Downloading image");
-	        InputStream is = (InputStream) new URL(url).getContent();
-	        Bitmap d = BitmapFactory.decodeStream(is);
-	        is.close();
-	        return d;
-	    } catch (Exception e) {
-	        return null;
+	        while ((line = reader.readLine()) != null) {
+	            sb.append(line + "\n");
+	        }
+	    } catch (IOException e) {
+	        e.printStackTrace();
+	    } finally {
+	        try {
+	            is.close();
+	        } catch (IOException e) {
+	            e.printStackTrace();
+	        }
 	    }
+	    return sb.toString();
 	}
 	
-	private void showNotification(String msg) {
+	public Bitmap getBitmapFromURL(String imageUrl) {
+		try {
+			URL url = new URL(imageUrl);
+			HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+			connection.setDoInput(true);
+			connection.connect();
+			InputStream input = connection.getInputStream();
+			Bitmap myBitmap = BitmapFactory.decodeStream(input);
+			return myBitmap;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+
+	
+	private void showNotification(String msg, String imageStringId) {
+		
+		Log.d(TAGWEAR,"showNotification msg: " + msg);
+		Log.d(TAGWEAR,"showNotification imageStringId: " + imageStringId);
+		if(msg.isEmpty()) msg = "testcode";
+		
+		int imageId = R.drawable.image1;
+		if(imageStringId.compareToIgnoreCase("image1") == 0) {
+			imageId = R.drawable.image1;
+		} else  if(imageStringId.compareToIgnoreCase("image2") == 0) {
+			imageId = R.drawable.image2;
+		} else if(imageStringId.compareToIgnoreCase("image3") == 0) {
+			imageId = R.drawable.image3;
+		} else if(imageStringId.compareToIgnoreCase("image4") == 0) {
+			imageId = R.drawable.image4;
+		} 
+		
 		Log.d(TAG, msg);
 		
-		Calendar c = Calendar.getInstance(); 
-		int seconds = c.get(Calendar.SECOND);
-		
-		String imgUrl = "http://resources3.news.com.au/images/2011/05/13/1226055/070087-italy-mona-lisa.jpg";
 		RemoteViews view1 = new CardBuilder(getApplication(), CardBuilder.Layout.COLUMNS)
-	    .setText("This is the COLUMNS layout with dynamic text.")
-	    .setFootnote("This is the footnote")
-	    .addImage(getBitmap(imgUrl))
+	    .setText(msg)
+	    //.setFootnote(msg)
+	    .addImage(imageId)
 	    .getRemoteViews();
 		
-		
+		/*Log.d(TAG, "Creating view");
 		RemoteViews views = new RemoteViews(getPackageName(), R.layout.livecard_beacon);
+		Log.d(TAG, "setting text and image url");
 		views.setTextViewText(R.id.livecard_content,msg);
+		views.setImageViewUri(R.id.livecard_image, Uri.parse(imgUrl));*/
 		liveCard = new LiveCard(getApplication(),"beacon");
+		Log.d(TAG, "Setting view");
 		//liveCard.setViews(views);
 		liveCard.setViews(view1);
 		Intent intent = new Intent(getApplication(), BeaconService.class);
 		liveCard.setAction(PendingIntent.getActivity(getApplication(), 0, intent, 0));
+		Log.d(TAG, "before publishing view");
 		liveCard.publish(LiveCard.PublishMode.REVEAL);
+		Log.d(TAG, "after publishing view");
+		
 		
 		
 	}
@@ -298,4 +424,60 @@ public class BeaconService extends Service implements SensorEventListener{
 
 	}
 
+	private class SendPostTask extends AsyncTask<Void, Void, Void> {
+
+		String uuid;
+		String BASE_URL = "http://wearhacks38.herokuapp.com/items/";
+		public SendPostTask(String uuid) {
+			this.uuid = uuid;
+		}
+		
+	    @Override
+	    protected Void doInBackground(Void... params) {
+	            // Make your request POST here. Example:
+	    	HttpClient httpclient = new DefaultHttpClient();
+	    	 
+	    	Log.d(TAG,"Requesting : "+ BASE_URL + uuid);
+	        // Prepare a request object
+	        HttpGet httpget = new HttpGet(BASE_URL + uuid);
+	 
+	        // Execute the request
+	        HttpResponse response;
+	        try {
+	            response = httpclient.execute(httpget);
+	            // Examine the response status
+	            Log.d(TAG,response.getStatusLine().toString());
+	 
+	            // Get hold of the response entity
+	            HttpEntity entity = response.getEntity();
+	            // If the response does not enclose an entity, there is no need
+	            // to worry about connection release
+	 
+	            if (entity != null) {
+	 
+	                // A Simple JSON Response Read
+	                InputStream instream = entity.getContent();
+	                String result= convertStreamToString(instream);
+	                //result = "{\"id\":\"b9407f30-f5f8-466e-aff9-25556b57fe6d\",\"name\":\"Mona Lisa\",\"images\":[{\"url\":\"image1\",\"time\":0, \"text\":\"hello monalisa\"},{\"url\":\"image2\",\"time\":50000, \"text\":\"hello leonardo\"}, {\"url\":\"image3\",\"time\":80000, \"text\":\"hello monalisa\"}, {\"url\":\"image4\",\"time\":120000, \"text\":\"hello monalisa\"}],\"audioUrl\":\"https://wearhacksmusic.blob.core.windows.net/asset-27608814-c12a-40d8-ab04-d5a631936e87/ACDC%20-%20You%20Shook%20Me%20All%20Night%20Long.mp4?sv=2012-02-12&sr=c&si=0462accd-c2f2-48ce-802a-f43c67f131f8&sig=HUqZaCAPgLm7uzovyi4FjJxG3s2TGoj1k7x1b2j3vdE%3D&st=2014-09-28T04%3A02%3A18Z&se=2016-09-27T04%3A02%3A18Z\"}";
+	                Log.d(TAGWEAR,result);
+	                // now you have the string representation of the HTML request
+	                instream.close();
+	                jObject = new JSONObject(result);
+	                if(jObject != null){
+	                	Log.d(TAGWEAR,"jObject NOT null, will playAudio() : "+jObject.getString("audioUrl"));
+	                	playAudio(jObject.getString("audioUrl"));
+	                }
+	                	
+	                else 
+	                	Log.d(TAGWEAR,"jObject is null");
+	            }
+	        } catch (Exception e) {Log.i("TAGWEAR","something went wrong with the http request");}
+	            return null;
+	    }
+
+	    protected void onPostExecute(Void result) {
+	      // Do something when finished.
+	    }
+	}
 }
+
