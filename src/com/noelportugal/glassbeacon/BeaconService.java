@@ -25,6 +25,7 @@ import com.estimote.sdk.BeaconManager;
 import com.estimote.sdk.Region;
 import com.estimote.sdk.Utils;
 import com.google.android.glass.timeline.LiveCard;
+import com.google.android.glass.timeline.LiveCard.PublishMode;
 import com.google.android.glass.widget.CardBuilder;
 
 import android.app.PendingIntent;
@@ -499,6 +500,16 @@ public class BeaconService extends Service implements SensorEventListener{
 	                instream.close();
 	                jObject = new JSONObject(result);
 	                if(jObject != null){
+	                	Log.d(TAGWEAR, "jObject not null, displaying prompt");
+	                	String name = jObject.getString("name");
+	                	
+	                	
+	                	liveCard = new LiveCard(getBaseContext(), "ItemCard");
+	                	RemoteViews liveCardView = new RemoteViews(getPackageName(), R.layout.item_layout);
+	                	liveCardView.setTextViewText(R.id.item_name, name);
+	                	liveCard.setViews(liveCardView);
+	                	liveCard.publish(PublishMode.REVEAL);
+	                	
 	                	Log.d(TAGWEAR,"jObject NOT null, will playAudio() : "+jObject.getString("audioUrl"));
 	                	playAudio(jObject.getString("audioUrl"));
 	                	
